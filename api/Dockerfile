@@ -40,11 +40,7 @@ COPY olm-web/.env.dockerimage /app/.env
 
 #USER $user
 
-ENV COMPOSER_ALLOW_SUPERUSER=1 \
-    PUSHER_APP_KEY=app-key \
-    PUSHER_APP_SECRET=app-secret \
-    PUSHER_APP_ID=app-id \
-    PUSHER_APP_CLUSTER=app-cluster
+ENV COMPOSER_ALLOW_SUPERUSER=1
 
 #RUN composer audit && composer suggest
 #RUN composer update --no-scripts && composer install --no-dev --no-progress --no-autoloader --audit --prefer-dist --verbose
