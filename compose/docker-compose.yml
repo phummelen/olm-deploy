@@ -5,7 +5,7 @@ services:
     container_name: olm-web
     restart: unless-stopped
     ports:
-      - 8000:8000
+      - 9000:9000
     working_dir: /app
     depends_on:
       - db
@@ -27,9 +27,18 @@ services:
       MYSQL_USER: ${DB_USERNAME}
       SERVICE_TAGS: dev
       SERVICE_NAME: mysql
+    ports:
+      - 3306:3306
     volumes:
       - ./config/mysql:/docker-entrypoint-initdb.d
       - ./data/mysql/db:/var/lib/mysql
+  db-init:
+    image: olm/web
+    container_name: olm-web-init
+    depends_on:
+      - db
+    working_dir: /app
+    command: ["php artisan migrate"]
   phpmyadmin:
     image: phpmyadmin/phpmyadmin:latest
     container_name: phpmyadmin
@@ -56,6 +65,18 @@ services:
     volumes:
       - ./data/minio:/data
     command: server /data
+  mta:
+    image: olm/mta
+    container_name: olm-mta
+    restart: unless-stopped
+    environment:
+      #RELAY_DOMAINS: ${RELAY_DOMAINS}
+      GMAIL_USER: ${GMAIL_USER}
+      GMAIL_PASSWORD: ${GMAIL_PASSWORD}
+      SES_REGION: ${SES_REGION}
+      SES_PORT: ${SES_PORT}
+      SES_USER: ${SES_USER}
+      SES_PASSWORD: ${SES_PASSWORD}
   # nginx:
   #   image: nginx:stable-alpine-slim
   #   container_name: olm-proxy
