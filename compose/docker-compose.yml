@@ -5,7 +5,7 @@ services:
     container_name: olm-web
     restart: unless-stopped
     ports:
-      - 9000:9000
+      - 8000:9000
     working_dir: /app
     depends_on:
       - db
@@ -60,8 +60,8 @@ services:
     environment:
       - MINIO_ACCESS_KEY=${AWS_ACCESS_KEY}
       - MINIO_SECRET_KEY=${AWS_ACCESS_SECRET}
-#    ports:
-#      - 9000/tcp
+    ports:
+      - 9000:9000/tcp
     volumes:
       - ./data/minio:/data
     command: server /data
@@ -77,17 +77,17 @@ services:
       SES_PORT: ${SES_PORT}
       SES_USER: ${SES_USER}
       SES_PASSWORD: ${SES_PASSWORD}
-  # nginx:
-  #   image: nginx:stable-alpine-slim
-  #   container_name: olm-proxy
-  #   restart: unless-stopped
-  #   ports:
-  #     - 8080:80
-  #   volumes:
-  #     - ./config/nginx/nginx.conf:/etc/nginx/nginx.conf:ro
-  #   depends_on:
-  #     - photo-storage
-  #     - web
+  nginx:
+    image: nginx:stable-alpine-slim
+    container_name: olm-proxy
+    restart: unless-stopped
+    ports:
+      - 8080:80
+    volumes:
+      - ./config/nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+    depends_on:
+      - photo-storage
+      - web
   # certbot:
   #   image: certbot/certbot
   #   volumes:
