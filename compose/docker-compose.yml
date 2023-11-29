@@ -1,7 +1,7 @@
 version: "3.8"
 services:
   web:
-    image: olm/web
+    image: phummelen/olm-web:${APP_VERSION}
     container_name: olm-web
     restart: unless-stopped
     ports:
@@ -11,7 +11,7 @@ services:
       - db
       - photo-storage
   docs:
-    image: olm/docs:latest
+    image: phummelen/olm-docs:${APP_VERSION}
     container_name: olm-docs
     restart: unless-stopped
     environment:
@@ -27,13 +27,13 @@ services:
       MYSQL_USER: ${DB_USERNAME}
       SERVICE_TAGS: dev
       SERVICE_NAME: mysql
-    ports:
-      - 3306:3306
+    # ports:
+    #   - 3306:3306
     volumes:
       - ./config/mysql:/docker-entrypoint-initdb.d
       - ./data/mysql/db:/var/lib/mysql
   db-init:
-    image: olm/web
+    image: phummelen/olm-web:${APP_VERSION}
     container_name: olm-web-init
     depends_on:
       - db
@@ -44,29 +44,30 @@ services:
     container_name: phpmyadmin
     environment:
       PMA_ARBITRARY: 1
-    ports:
-      - 8087:80
+    # ports:
+    #   - 8087:80
+    restart: unless-stopped
   redis:
     image: redis
     container_name: olm-redis
-    restart: unless-stopped
     # ports:
     #   - 6379/tcp
     #options: --health-cmd="redis-cli ping" --health-interval=10s --health-timeout=5s --health-retries=3
+    restart: unless-stopped
   photo-storage:
     image: minio/minio:latest
-    container_name: olm-storage
+    container_name: public-assets.olm-storage
     restart: unless-stopped
     environment:
       - MINIO_ACCESS_KEY=${AWS_ACCESS_KEY}
       - MINIO_SECRET_KEY=${AWS_ACCESS_SECRET}
-    ports:
-      - 9000:9000/tcp
+    # ports:
+    #   - 9000:9000/tcp
     volumes:
       - ./data/minio:/data
     command: server /data
   mta:
-    image: olm/mta
+    image: phummelen/olm-mta:${APP_VERSION}
     container_name: olm-mta
     restart: unless-stopped
     environment:
