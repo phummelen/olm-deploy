@@ -8,8 +8,8 @@ RUN apt-get update && \
         rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/* && \
         find /var/log -type f | while read f; do echo -ne '' > $f; done;
 
-COPY olm-deploy/mta/entrypoint.sh /bin/
-COPY olm-deploy/mta/set-exim4-update-conf /bin/
+COPY ./mta/entrypoint.sh /bin/
+COPY ./mta/set-exim4-update-conf /bin/
 
 RUN chmod a+x /bin/entrypoint.sh && \
     chmod a+x /bin/set-exim4-update-conf
