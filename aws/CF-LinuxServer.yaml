@@ -1,0 +1,232 @@
+AWSTemplateFormatVersion: 2010-09-09
+Description: Linux Server - Standalone
+Parameters:
+  Environment:              {Type: String, Default: "test", AllowedValues: ["prod", "test", "acc"]}
+  KeyPairName:              {Description: KeyPair for EC2 system, Type: "AWS::EC2::KeyPair::KeyName"}
+  VpcId:                    {Type: String, Default: "vpc-001f23a4ebd28632b"} #Default VPC
+  PrivateSubNet:            {Type: String, Default: "subnet-0e14ab535d7e91d35"} # Default VPC eu-west-1c subnet
+  PublicSubNet:             {Type: String, Default: "subnet-02f8c213d5828f8dc"} # Default VPC eu-west-1c subnet
+  InstanceType:             {Description: InstanceType for EC2 system, Type: String, Default: "t2.micro",AllowedValues: ["t2.micro", "t3a.medium", "t3a.large", "m5.large"], ConstraintDescription: Must be either t2.micro or t3a.medium or t3a.large or m5.large!}
+  DiskVolumeSizeRoot:       {Description: Root volume size, Type: String, Default: "30"}
+  DiskVolumeSizeApps:       {Description: Root volume size, Type: String, Default: "50"}
+  LatestLinuxAmi:           {Type: 'AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>',  Default: '/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2'}
+
+  TerminationProtection:    {Description: Termination Protection,   Type: String,   Default: "false", AllowedValues: ["true", "false"]}
+
+  AwsAccessKey:             {Type: String, Default: "key"}
+  AwsSecretKey:             {Type: String, Default: "secret"}
+
+Resources:
+# Create IAM Role for EC2 systems
+  ec2RoleBasis:
+    Type: "AWS::IAM::Role"
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          -
+            Effect: "Allow"
+            Principal:
+              Service:
+                - "ec2.amazonaws.com"
+            Action:
+              - "sts:AssumeRole"
+      Path: "/"
+  ec2RolePolicyBasis:
+    Type: "AWS::IAM::Policy"
+    Properties:
+      PolicyName: !Join [ "", [ !Ref Environment, ".instance.policy" ]]
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: "Allow"
+            Action: "cloudwatch:*"
+            Resource: "*"
+          - Effect: "Allow"
+            Action: "logs:*"
+            Resource: "*"
+          - Effect: "Allow"
+            Action: "ssm:*"
+            Resource: "*"
+          - Effect: "Allow"
+            Action: "ec2messages:*"
+            Resource: "*"
+          - Effect: "Allow"
+            Action: 
+            - ssmmessages:CreateControlChannel
+            - ssmmessages:CreateDataChannel
+            - ssmmessages:OpenControlChannel
+            - ssmmessages:OpenDataChannel
+            Resource: "*"       
+          - Effect: Allow
+            Action:
+            - s3:Get*
+            - s3:List*
+            Resource: "*"
+      Roles:
+        - !Ref ec2RoleBasis
+  ec2InstanceProfileBasis:
+    Type: "AWS::IAM::InstanceProfile"
+    Properties:
+      Path: "/"
+      Roles:
+        - !Ref ec2RoleBasis
+
+# Linux Server
+  EC2SG:
+    Type: 'AWS::EC2::SecurityGroup'
+    Properties:
+      VpcId: !Ref VpcId
+      GroupDescription: Allow access from specific addresses only
+      SecurityGroupEgress:
+        - IpProtocol: tcp
+          Description: 'HTTP Outbound'
+          FromPort: 80
+          ToPort: 80
+          CidrIp: 0.0.0.0/0
+        - IpProtocol: tcp
+          Description: 'HTTPS Outbound'
+          FromPort: 443
+          ToPort: 443
+          CidrIp: 0.0.0.0/0
+        - IpProtocol: tcp
+          Description: 'SMTP Relay'
+          FromPort: 587
+          ToPort: 587
+          CidrIp: 0.0.0.0/0
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          Description: 'RDP Hummelen Steenwijk'
+          FromPort: 22
+          ToPort: 22
+          CidrIp: 62.45.98.147/32
+        - IpProtocol: tcp
+          Description: 'HTTPS inbound'
+          FromPort: 443
+          ToPort: 443
+          CidrIp: 0.0.0.0/0
+        - IpProtocol: tcp
+          Description: 'HTTP inbound'
+          FromPort: 80
+          ToPort: 80
+          CidrIp: 0.0.0.0/0
+
+  EC2NIC:
+    Type: AWS::EC2::NetworkInterface
+    Properties:
+      Description: Network Interface HostBasis
+      GroupSet:
+        - !Ref EC2SG
+      SourceDestCheck: false
+      SubnetId: !Ref PublicSubNet
+
+  EIPAdress2NIC:
+    Type: AWS::EC2::EIP
+    #Condition: PartOfPublicSubnet
+    Properties:
+      Domain: vpc
+  EIPAssociation2NIC:
+    Type: AWS::EC2::EIPAssociation
+    #Condition: PartOfPublicSubnet
+    Properties:
+      AllocationId: !GetAtt EIPAdress2NIC.AllocationId
+      #EIP: !Ref EIPAdress2NIC
+      InstanceId: !Ref EC2Host
+      NetworkInterfaceId: !Ref EC2NIC
+
+  EC2Host:
+    Type: AWS::EC2::Instance
+    Properties:
+      ImageId: !Ref LatestLinuxAmi
+      InstanceType: !Ref InstanceType
+      KeyName: !Ref KeyPairName
+      IamInstanceProfile: !Ref ec2InstanceProfileBasis
+      BlockDeviceMappings:
+        - DeviceName: "/dev/xvda"
+          Ebs:
+            VolumeSize: !Ref DiskVolumeSizeRoot
+            VolumeType: "gp3"
+            Encrypted: 'true'
+        - DeviceName: "/dev/sdc"
+          Ebs:
+            VolumeSize: !Ref DiskVolumeSizeApps
+            VolumeType: "gp3"
+            Encrypted: 'true'
+      NetworkInterfaces:
+        - NetworkInterfaceId: !Ref EC2NIC
+          DeviceIndex: 0
+      Tags:
+        - Key: Name
+          Value: !Sub 'LitterTagger | ${Environment} - ${AWS::StackName}'
+      UserData:
+        Fn::Base64: !Sub |
+          #!/bin/bash
+
+          timedatectl set-timezone Europe/Amsterdam
+
+          yum install openssl11 dos2unix pcre2 git -y
+          yum update -y
+
+          mkdir /tmp/ssm
+          cd /tmp/ssm
+          aws s3 cp s3://ec2-downloads-windows/SSMAgent/latest/linux_amd64/amazon-ssm-agent.rpm
+          rpm --install amazon-ssm-agent.rpm
+          systemctl enable amazon-ssm-agent
+
+          mkdir /tmp/awscli
+          cd /tmp/awscli ; curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
+          unzip awscliv2.zip ; sh aws/install --bin-dir /bin --install-dir /tmp/awscli --update
+
+          # stop and disable postfix - we need port 25 for the MTA container
+          service postfix stop
+          chkconfig postfix off
+
+          export IP_ADDRESS=`ifconfig eth0 | grep "inet" | grep -v inet6 | awk '{print $2}'`
+
+          # prepare the disks
+          export disk_v1="/dev/nvme1n1"
+          mkfs -t xfs $disk_v1
+          mkdir /v1
+          export disk_v1_uuid=`blkid | grep $disk_v1 | awk '{print $2}'`
+          echo "$disk_v1_uuid /v1   xfs  defaults,nofail,noatime  0  2" >> /etc/fstab
+          mount $disk_v1_uuid /v1
+
+          mkdir /v1/install
+          mkdir /v1/temp
+          mkdir /v1/littertagger
+
+          # install Docker
+          yum install -y docker
+          # install DockerCompose
+          curl -L https://github.com/docker/compose/releases/latest/download/docker-compose-$(uname -s)-$(uname -m) -o /usr/local/sbin/docker-compose
+          chmod +x /usr/local/sbin/docker-compose
+
+          # cat <<EOT >> /etc/docker/daemon.json
+          # {
+          #   "data-root":"/v1/docker",
+          #   "storage-driver": "overlay2",
+          #   "userland-proxy": false,
+          #   "log-level": "warn",
+          #   "log-driver": "json-file",
+          #   "log-opts": {
+          #     "max-size": "10m",
+          #     "max-file": "5"
+          #     }
+          # }
+          # EOT
+
+          systemctl enable docker.service
+          systemctl start docker.service
+          usermod -a -G docker ec2-user
+          # usermod -a -G docker ssm-user
+
+          # start cfn-init
+          /opt/aws/bin/cfn-init -v --stack ${AWS::StackName} --resource Instance --region ${AWS::Region}
+
+          #configure AWS CLI credentials
+          aws configure set aws_access_key_id = ${AwsAccessKey}
+          aws configure set aws_secret_access_key = ${AwsSecretKey}
+          aws configure set region = eu-west-1
+          aws configure set output = json
+
+      DisableApiTermination: !Ref TerminationProtection
