@@ -1,0 +1,159 @@
+AWSTemplateFormatVersion: 2010-09-09
+Description: ECR Registry Repo for a Litter Images
+
+Parameters:
+  tagPrefix:                {Type: String, Default: "test-", AllowedValues: ["prod-", "acc-", "test-", "base-"]}
+
+Resources:
+  ECRDocs:
+    Type: AWS::ECR::Repository
+    Properties:
+      RepositoryName: hero/docs
+      LifecyclePolicy:
+        LifecyclePolicyText: !Sub |
+          {
+            "rules": [
+              {
+                "rulePriority": 1,
+                "description": "keep 3 base images",
+                "selection": {
+                  "tagStatus": "tagged",
+                  "countType": "imageCountMoreThan",
+                  "countNumber": 3,
+                  "tagPrefixList": ["${tagPrefix}"]
+                },
+                "action": { "type": "expire" }
+              },
+              {
+                "rulePriority": 2,
+                "description": "remove untagged images",
+                "selection": {
+                  "tagStatus": "untagged",
+                  "countType": "imageCountMoreThan",
+                  "countNumber": 1
+                },
+                "action": { "type": "expire" }
+              }
+            ]
+          }
+  ECRWeb:
+    Type: AWS::ECR::Repository
+    Properties:
+      RepositoryName: hero/web
+      LifecyclePolicy:
+        LifecyclePolicyText: !Sub |
+          {
+            "rules": [
+              {
+                "rulePriority": 1,
+                "description": "keep 3 base images",
+                "selection": {
+                  "tagStatus": "tagged",
+                  "countType": "imageCountMoreThan",
+                  "countNumber": 3,
+                  "tagPrefixList": ["${tagPrefix}"]
+                },
+                "action": { "type": "expire" }
+              },
+              {
+                "rulePriority": 2,
+                "description": "remove untagged images",
+                "selection": {
+                  "tagStatus": "untagged",
+                  "countType": "imageCountMoreThan",
+                  "countNumber": 1
+                },
+                "action": { "type": "expire" }
+              }
+            ]
+          }
+  ECRUser:
+    Type: AWS::IAM::User
+    Properties: 
+      Path: "/"
+      Policies: 
+          - PolicyName: AllowPushPullCreate
+            PolicyDocument:
+              Version: '2012-10-17'
+              Statement:
+              - Effect: Allow
+                Action:
+                - ecr:BatchGetImage
+                - ecr:BatchCheckLayerAvailability
+                - ecr:CompleteLayerUpload
+                - ecr:GetDownloadUrlForLayer
+                - ecr:InitiateLayerUpload
+                - ecr:DescribeImages
+                - ecr:ListImages
+                - ecr:PutImage
+                - ecr:UploadLayerPart
+                - ecr:CreateRepository
+                - ecr:DescribeRepositories
+                - ecr:GetRepositoryPolicy
+                - ecr:PutLifecyclePolicy
+                - ecr:DeleteRepository
+                - ecr:GetAuthorizationToken
+                - ecr:ListTagsForResource
+                - ecr:UntagResource
+                - ecr:TagResource
+                Resource:
+                - "*"
+              - Effect: Allow
+                Action:
+                - cloudformation:*
+                Resource:
+                - "*"
+      UserName: ecr-user
+  ECRUserReadOnly:
+    Type: AWS::IAM::User
+    Properties: 
+      Path: "/"
+      Policies: 
+          - PolicyName: AllowReadOnly
+            #"arn:aws:iam::aws:policy/service-role/AmazonEC2ContainerRegistryReadOnly" 
+            PolicyDocument:
+              Version: '2012-10-17'
+              Statement:
+              - Effect: Allow
+                Action:
+                - ecr:GetAuthorizationToken
+                - ecr:GetDownloadUrlForLayer
+                - ecr:GetRepositoryPolicy
+                - ecr:DescribeRepositories
+                - ecr:ListImages
+                - ecr:DescribeImages
+                - ecr:BatchGetImage
+                - ecr:GetLifecyclePolicy
+                - ecr:GetLifecyclePolicyPreview
+                - ecr:ListTagsForResource
+                - ecr:DescribeImageScanFindings
+                Resource:
+                - "*"
+      UserName: ecr-user-ro
+
+  # ECRWeb:
+  #   Type: AWS::ECR::PublicRepository
+  #   Properties:
+  #     RepositoryName: hero/web
+  #     RepositoryCatalogData:
+  #       UsageText: "How to use this image ..."
+  #       AboutText: "This image contains the web section of our LitterApp"
+  #       OperatingSystems:
+  #         - "Linux"
+  #       Architectures:
+  #         - "x86"
+  #         - "ARM"
+  #       RepositoryDescription: "This image contains the web section of our LitterApp"
+  # ECRDocs:
+  #   Type: AWS::ECR::PublicRepository
+  #   Properties:
+  #     RepositoryName: hero/docs
+  #     RepositoryCatalogData:
+  #       UsageText: "How to use this image ..."
+  #       AboutText: "This image contains the documentation of our LitterApp"
+  #       OperatingSystems:
+  #         - "Linux"
+  #       Architectures:
+  #         - "x86"
+  #         - "ARM"
+  #       RepositoryDescription: "This image contains the documentation of our LitterApp"

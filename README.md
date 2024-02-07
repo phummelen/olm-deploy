@@ -4,14 +4,14 @@ OLM Deployment repo is used to store all files needed to run an environment on a
 ## Used commands
 
 ### WEB
-cd /home/phummelen/openlittermap/olm-web
-docker build --rm -t phummelen/olm-web:latest -f deployment/web-dev.dockerfile .
+#cd /home/phummelen/openlittermap/littertagger
+docker build --rm -t phummelen/hero-web:latest -f deployment/web-dev.dockerfile .
 
-docker run --rm -it -p 9000:9000 phummelen/olm-web:latest
+docker run --rm -it -p 9000:9000 phummelen/hero-web:latest
 
 ### DOCS
 cd /home/phummelen/openlittermap/olm-documentation
-docker build --rm -t phummelen/olm-docs:latest -f deploy/build/dockerfile .
+docker build --rm -t phummelen/hero-docs:latest -f deploy/build/dockerfile .
 
 ### MTA
 cd /home/phummelen/openlittermap/olm-deploy

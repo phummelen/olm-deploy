@@ -61,11 +61,14 @@ services:
     environment:
       - MINIO_ACCESS_KEY=${AWS_ACCESS_KEY}
       - MINIO_SECRET_KEY=${AWS_ACCESS_SECRET}
-    # ports:
-    #   - 9000:9000/tcp
+      - MINIO_ROOT_USER=${MINIO_ROOT_USER}
+      - MINIO_ROOT_PASSWORD=${MINIO_ROOT_PASSWORD}
+    ports:
+       - 9000:9000
+       - 9090:9090
     volumes:
       - ./data/minio:/data
-    command: server /data
+    command: server /data --console-address ":9090"
   mta:
     image: phummelen/olm-mta:${APP_VERSION}
     container_name: olm-mta

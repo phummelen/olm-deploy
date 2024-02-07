@@ -120,19 +120,19 @@ Resources:
       SourceDestCheck: false
       SubnetId: !Ref PublicSubNet
 
-  EIPAdress2NIC:
-    Type: AWS::EC2::EIP
-    #Condition: PartOfPublicSubnet
-    Properties:
-      Domain: vpc
-  EIPAssociation2NIC:
-    Type: AWS::EC2::EIPAssociation
-    #Condition: PartOfPublicSubnet
-    Properties:
-      AllocationId: !GetAtt EIPAdress2NIC.AllocationId
-      #EIP: !Ref EIPAdress2NIC
-      InstanceId: !Ref EC2Host
-      NetworkInterfaceId: !Ref EC2NIC
+  # EIPAdress2NIC:
+  #   Type: AWS::EC2::EIP
+  #   #Condition: PartOfPublicSubnet
+  #   Properties:
+  #     Domain: vpc
+  # EIPAssociation2NIC:
+  #   Type: AWS::EC2::EIPAssociation
+  #   #Condition: PartOfPublicSubnet
+  #   Properties:
+  #     AllocationId: !GetAtt EIPAdress2NIC.AllocationId
+  #     #EIP: !Ref EIPAdress2NIC
+  #     InstanceId: !Ref EC2Host
+  #     NetworkInterfaceId: !Ref EC2NIC
 
   EC2Host:
     Type: AWS::EC2::Instance
