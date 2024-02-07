@@ -1,0 +1,247 @@
+AWSTemplateFormatVersion: 2010-09-09
+Description: S3 bucket manual added
+
+Parameters:
+  Environment:              {Type: String, Default: "test", AllowedValues: ["prod", "test", "dev"]}
+  Version:                  {Type: String, Default: "v1", AllowedValues: ["v1", "v2"]}
+  BucketPurpose:            {Type: String, Default: "litterapp", AllowedValues: ["litterapp", "photos"]}
+  BucketBackup:             {Type: String, Default: "backup", AllowedValues: ["backup", "backup2"]}
+  CreateUsers:              {Type: String, Default: "yes", AllowedValues: ["yes", "no"]}
+  CreateReadOnlyUser:       {Type: String, Default: "no",  AllowedValues: ["yes", "no"]}
+  CreateBuckets:            {Type: String, Default: "yes", AllowedValues: ["yes", "no"]}
+
+Conditions:
+  IsProd:     !Equals [!Ref Environment, "prod"]
+  IsTest:     !Equals [!Ref Environment, "test"]
+  IsNotTest:  !Not [Condition: IsTest]
+  CreateUsers: !Equals [!Ref CreateUsers, "yes"]
+  CreateReadOnlyUser: !Equals [!Ref CreateReadOnlyUser, "yes"]
+  CreateBuckets: !Equals [!Ref CreateBuckets, "yes"]
+
+Resources:
+  S3MainBucket:
+    Type: 'AWS::S3::Bucket'
+    Condition: CreateBuckets
+    DeletionPolicy: Retain
+    Properties:
+      BucketEncryption:
+        ServerSideEncryptionConfiguration: 
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      BucketName: !Sub "${Version}-${Environment}-${BucketPurpose}"
+      CorsConfiguration:
+        CorsRules:
+          - AllowedHeaders:
+              - '*'
+            AllowedMethods:
+              - GET
+              - POST
+            AllowedOrigins:
+              - '*'
+            ExposedHeaders:
+              - Content-Length
+              - Content-Type
+            Id: AttachmentBucketCORSRule
+            MaxAge: 1800 #3000
+  AttachmentBucketPolicy:
+    Type: 'AWS::S3::BucketPolicy'
+    Condition: CreateBuckets
+    Properties:
+      PolicyDocument:
+        Id: MyPolicy
+        Version: 2012-10-17
+        Statement:
+          - Sid: PreventBucketDeletion
+            Effect: Deny
+            Principal: '*'
+            Action: 's3:DeleteBucket'
+            Resource: !Join 
+              - ''
+              - - 'arn:aws:s3:::'
+                - !Ref S3MainBucket
+      Bucket: !Ref S3MainBucket
+
+  S3BackupBucket:
+    Type: 'AWS::S3::Bucket'
+    Condition: CreateBuckets
+    DeletionPolicy: Retain
+    Properties:
+      BucketEncryption:
+        ServerSideEncryptionConfiguration: 
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      BucketName: !Sub "${Version}-${Environment}-${BucketBackup}"
+      #CorsConfiguration | not in use for a backup bucket
+      #LifecycleConfiguration | done on file level, in the backup scripts
+      PublicAccessBlockConfiguration:
+          BlockPublicAcls: true
+          BlockPublicPolicy: true
+          IgnorePublicAcls: true
+          RestrictPublicBuckets: true
+  #BackupBucketPolicy #not in use yet, it's not needed.
+
+  S3ExportBucket:
+    Type: 'AWS::S3::Bucket'
+    Condition: CreateBuckets
+    DeletionPolicy: Delete
+    Properties:
+      #AccessControl: PublicRead
+      BucketEncryption:
+        ServerSideEncryptionConfiguration: 
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      BucketName: !Sub "${Version}-${Environment}-export"
+      CorsConfiguration:
+        CorsRules:
+          - AllowedHeaders:
+              - '*'
+            AllowedMethods:
+              - GET
+            AllowedOrigins:
+              - '*'
+            ExposedHeaders:
+              - Content-Length
+              - Content-Type
+            Id: ExportBucketCORSRule
+            MaxAge: 1800
+      LifecycleConfiguration:
+        Rules:
+        - Id: "Delete after a day"
+          ExpirationInDays: 1
+          Status: Enabled
+      PublicAccessBlockConfiguration:
+          BlockPublicAcls: false
+          BlockPublicPolicy: false
+          IgnorePublicAcls: false
+          RestrictPublicBuckets: false
+  ExportBucketPolicy:
+    Type: 'AWS::S3::BucketPolicy'
+    Condition: CreateBuckets
+    Properties:
+      PolicyDocument:
+        Id: MyPolicy
+        Version: 2012-10-17
+        Statement:
+          - Sid: PublicReadForGetBucketObjects
+            Effect: Allow
+            Principal: '*'
+            Action: 's3:GetObject'
+            Resource: !Join 
+              - ''
+              - - 'arn:aws:s3:::'
+                - !Ref S3ExportBucket
+                - /*
+      Bucket: !Ref S3ExportBucket
+
+  #User Account for S3 Access
+  S3User:
+    Type: AWS::IAM::User
+    Condition: CreateUsers
+    Properties:
+      UserName: !Sub "${Version}-${Environment}-s3-user"
+      Policies:
+        - PolicyName: bucket-access
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+            - Effect: Allow
+              Action:
+              - s3:*
+              Resource:
+              - !Sub arn:aws:s3:::${Version}-${Environment}-${BucketPurpose}
+              - !Sub arn:aws:s3:::${Version}-${Environment}-${BucketPurpose}/*
+              - !Sub arn:aws:s3:::${Version}-${Environment}-${BucketBackup}
+              - !Sub arn:aws:s3:::${Version}-${Environment}-${BucketBackup}/*
+              - !Sub arn:aws:s3:::${Version}-${Environment}-export
+              - !Sub arn:aws:s3:::${Version}-${Environment}-export/*
+  S3UserAccessKey:
+    Type: AWS::IAM::AccessKey
+    Condition: CreateUsers
+    Properties:
+      UserName: !Ref S3User
+
+  #User Account for ReadOnly S3 Access
+  ReadOnlyS3User:
+    Type: AWS::IAM::User
+    Condition: CreateReadOnlyUser
+    Properties:
+      UserName: !Sub "${Version}-${Environment}-s3-readonly"
+  ReadOnlyS3UserAccessKey:
+    Type: AWS::IAM::AccessKey
+    Condition: CreateReadOnlyUser
+    Properties:
+      UserName: !Ref ReadOnlyS3User
+  ReadOnlyS3Policy:
+    Type: AWS::IAM::Policy
+    Condition: CreateReadOnlyUser
+    Properties:
+      PolicyName: ReadOnlyS3Policy
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Action:
+              - s3:GetObject
+              - s3:ListBucket
+            Resource:
+              - !Sub arn:aws:s3:::${Version}-${Environment}-${BucketPurpose}
+              - !Sub arn:aws:s3:::${Version}-${Environment}-${BucketPurpose}/*
+              #- Not the BucketBackup!
+              - !Sub arn:aws:s3:::${Version}-${Environment}-export
+              - !Sub arn:aws:s3:::${Version}-${Environment}-export/*
+              - !Sub arn:aws:s3:::${Version}-${Environment}-assets
+              - !Sub arn:aws:s3:::${Version}-${Environment}-assets/*
+      Users:
+        - !Ref ReadOnlyS3User
+
+Outputs:
+  S3MainBucket:
+    Description: S3 Main Bucket (${BucketPurpose})
+    Condition: CreateBuckets
+    Value: !Ref S3MainBucket
+    Export:
+     Name: !Sub "${Version}-${Environment}-${BucketPurpose}"
+  S3BackupBucket:
+    Description: S3 Backup Bucket
+    Condition: CreateBuckets
+    Value: !Ref S3BackupBucket
+    Export:
+     Name: !Sub "${Version}-${Environment}-backup"
+  S3ExportBucket:
+    Description: S3 Export Bucket
+    Condition: CreateBuckets
+    Value: !Ref S3ExportBucket
+    Export:
+     Name: !Sub "${Version}-${Environment}-export"
+
+  S3User:
+    Value: !Ref S3User
+    Condition: CreateUsers
+    Export:
+      Name: !Sub "${Version}-${Environment}-s3-user"
+  AccessKeyforS3User:
+    Value: !Ref S3UserAccessKey
+    Condition: CreateUsers
+    Export:
+      Name: !Sub "${Version}-${Environment}-s3-accesskey"
+  AccessSecretKeyforS3User:
+    Value: !GetAtt S3UserAccessKey.SecretAccessKey
+    Condition: CreateUsers
+    Export:
+      Name: !Sub "${Version}-${Environment}-s3-secretkey"
+
+  ReadOnlyS3User:
+    Value: !Ref ReadOnlyS3User
+    Condition: CreateReadOnlyUser
+    Export:
+      Name: !Sub "${Version}-${Environment}-readonly-s3-user"
+  AccessKeyforReadOnlyS3User:
+    Value: !Ref ReadOnlyS3UserAccessKey
+    Condition: CreateReadOnlyUser
+    Export:
+      Name: !Sub "${Version}-${Environment}-readonly-s3-accesskey"
+  AccessSecretKeyforReadOnlyS3User:
+    Value: !GetAtt ReadOnlyS3UserAccessKey.SecretAccessKey
+    Condition: CreateReadOnlyUser
+    Export:
+      Name: !Sub "${Version}-${Environment}-readonly-s3-secretkey"
