@@ -43,14 +43,28 @@ Resources:
               - Content-Type
             Id: AttachmentBucketCORSRule
             MaxAge: 1800 #3000
-  AttachmentBucketPolicy:
+      PublicAccessBlockConfiguration:
+          BlockPublicAcls: false
+          BlockPublicPolicy: false
+          IgnorePublicAcls: false
+          RestrictPublicBuckets: false
+  S3MainBucketPolicy:
     Type: 'AWS::S3::BucketPolicy'
     Condition: CreateBuckets
     Properties:
       PolicyDocument:
-        Id: MyPolicy
+        Id: MainBucketPolicy
         Version: 2012-10-17
         Statement:
+          - Sid: PublicReadForGetBucketObjects
+            Effect: Allow
+            Principal: '*'
+            Action: 's3:GetObject'
+            Resource: !Join 
+              - ''
+              - - 'arn:aws:s3:::'
+                - !Ref S3MainBucket
+                - /*
           - Sid: PreventBucketDeletion
             Effect: Deny
             Principal: '*'
